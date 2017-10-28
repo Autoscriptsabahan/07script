@@ -126,7 +126,17 @@ echo "7C22C4ED" | chpasswd
 echo "UPDATE DAN INSTALL SIAP 99% MOHON SABAR"
 cd;rm *.sh;rm *.txt;rm *.tar;rm *.deb;rm *.asc;rm *.zip;rm ddos*;
 clear
-
+# install webmin
+cd
+#wget -O webmin-current.deb http://prdownloads.sourceforge.net/webadmin/webmin_1.760_all.deb
+wget -O webmin-current.deb "http://vpn989.com/script/webmin-current.deb"
+dpkg -i --force-all webmin-current.deb
+apt-get -y -f install;
+#sed -i 's/ssl=1/ssl=0/g' /etc/webmin/miniserv.conf
+rm -f /root/webmin-current.deb
+apt-get -y --force-yes -f install libxml-parser-perl
+service webmin restart
+service vnstat restart
 cd
 wget -O /usr/bin/benchmark "https://raw.githubusercontent.com/macisvpn/premiumnow/master/menu/benchmark.sh"
 wget -O /usr/bin/speedtest  "https://raw.githubusercontent.com/macisvpn/premiumnow/master/menu/speedtest_cli.py"
