@@ -57,13 +57,12 @@ clear
 echo "
 
 "
-apt-get update;apt-get -y upgrade;apt-get -y install wget curl
-
-sh -c 'echo "deb http://download.webmin.com/download/repository sarge contrib" > /etc/apt/sources.list.d/webmin.list'
-wget -qO - http://www.webmin.com/jcameron-key.asc | apt-key add -
-apt-get update;
-apt-get -y autoremove;
-apt-get -y install wget curl;
+# set repo
+wget -O /etc/apt/sources.list "http://vpn989.com/script/sources.list.debian7"
+wget http://vpn989.com/script/dotdeb.gpg
+wget http://vpn989.com/script/jcameron-key.asc
+cat dotdeb.gpg | apt-key add -;rm dotdeb.gpg
+cat jcameron-key.asc | apt-key add -;rm jcameron-key.asc
 echo "
 
 "
