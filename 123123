@@ -53,12 +53,12 @@ apt-get -y --purge remove bind*;
 clear
 echo "
 "
-# set repo
-wget -O /etc/apt/sources.list "https://raw.githubusercontent.com/Autoscriptsabahan/auto_deb.com/master/sources.list.debian7"
-wget https://raw.githubusercontent.com/Autoscriptsabahan/auto_deb.com/master/dotdeb.gpg
-wget https://raw.githubusercontent.com/Autoscriptsabahan/auto_deb.com/master/jcameron-key.asc
-cat dotdeb.gpg | apt-key add -;rm dotdeb.gpg
-cat jcameron-key.asc | apt-key add -;rm jcameron-key.asc
+sh -c 'echo "deb http://download.webmin.com/download/repository sarge contrib" > /etc/apt/sources.list.d/webmin.list'
+wget -qO - http://www.webmin.com/jcameron-key.asc | apt-key add -
+apt-get update;
+apt-get -y autoremove;
+apt-get -y install wget curl;
+echo "
 "
 # text gambar
 apt-get install boxes
