@@ -1,0 +1,416 @@
+#!/bin/bash
+
+if [[ $USER != "root" ]]; then
+	echo "Maaf, Anda harus menjalankan ini sebagai root"
+	exit
+fi
+
+# initialisasi var
+export DEBIAN_FRONTEND=noninteractive
+OS=`uname -m`;
+MYIP=$(wget -qO- ipv4.icanhazip.com);
+MYIP2="s/xxxxxxxxx/$MYIP/g";
+ether=`ifconfig | cut -c 1-8 | sort | uniq -u | grep venet0 | grep -v venet0:`
+if [[ $ether = "" ]]; then
+        ether=eth0
+fi
+
+#vps="zvur";
+vps="aneka";
+
+if [[ $vps = "zvur" ]]; then
+	source="http://scripts.gapaiasa.com"
+else
+	source="https://raw.githubusercontent.com/BradVPN/centos7sh/master"
+fi
+
+# go to root
+cd
+
+
+function VAR Intializer {
+	echo -e "${cyan} ======================= ${noclr}" "${purple} AUTOSCRIPT SSH+VPN CENTOS 7 ${noclr}" "${cyan} ======================= ${noclr}"
+	OS=`uname -p`;
+}
+
+function RootUse {
+	echo "Switching to root..."
+cd
+}
+
+
+function SetLocale {
+	echo "Setting Locale.."
+	sed -i 's/AcceptEnv/#AcceptEnv/g' /etc/ssh/sshd_config
+	service sshd restart
+}
+
+
+function DisableIPV6 {
+	echo "Disabling IPV6..."
+	echo 1 > /proc/sys/net/ipv6/conf/all/disable_ipv6
+sed -i '$ i\echo 1 > /proc/sys/net/ipv6/conf/all/disable_ipv6' /etc/rc.local
+sed -i '$ i\echo 1 > /proc/sys/net/ipv6/conf/all/disable_ipv6' /etc/rc.d/rc.local
+}
+
+
+function InstallAPTGet {
+	echo "Installing apt-get..."
+	uname -i
+	wget http://pkgs.repoforge.org/rpmforge-release/rpmforge-release-0.5.3-1.el6.rf.x86_64.rpm
+	rpm -i rpmforge-release-0.5.*.rpm
+	yum install apt
+	sudo apt-get update
+}
+
+
+function InstallWgetCurl {
+	echo "Installing WGET and CURL..."
+	yum -y install wget curl
+}
+
+function SettingRepo {
+	echo "Setting the Repository..."
+wget http://dl.fedoraproject.org/pub/epel/6/i386/epel-release-6-8.noarch.rpm
+wget http://rpms.famillecollet.com/enterprise/remi-release-6.rpm
+rpm -Uvh epel-release-6-8.noarch.rpm
+rpm -Uvh remi-release-6.rpm
+}
+
+if [ "$OS" == "x86_64" ]; then
+  wget http://pkgs.repoforge.org/rpmforge-release/rpmforge-release-0.5.3-1.el6.rf.x86_64.rpm
+  rpm -Uvh rpmforge-release-0.5.3-1.el6.rf.x86_64.rpm
+else
+  wget http://pkgs.repoforge.org/rpmforge-release/rpmforge-release-0.5.3-1.el6.rf.i686.rpm
+  rpm -Uvh rpmforge-release-0.5.3-1.el6.rf.i686.rpm
+fi
+
+sed -i 's/enabled = 1/enabled = 0/g' /etc/yum.repos.d/rpmforge.repo
+sed -i -e "/^\[remi\]/,/^\[.*\]/ s|^\(enabled[ \t]*=[ \t]*0\\)|enabled=1|" /etc/yum.repos.d/remi.repo
+rm -f *.rpm
+
+function RemoveUnused {
+	echo "Removing the UNUSED Files..."
+yum -y remove sendmail;
+yum -y remove httpd;
+yum -y remove cyrus-sasl
+}
+
+function UpdateSystem {
+	echo "Updating the System..."
+yum -y update
+}
+
+function installwebserver {
+	echo "Installing Web Server..."
+yum -y install nginx php-fpm php-cli
+service nginx restart
+service php-fpm restart
+chkconfig nginx on
+chkconfig php-fpm on
+}
+
+# install essential package
+yum -y install rrdtool screen iftop htop nmap bc nethogs openvpn vnstat ngrep mtr git zsh mrtg unrar rsyslog rkhunter mrtg net-snmp net-snmp-utils expect nano bind-utils
+yum -y groupinstall 'Development Tools'
+yum -y install cmake
+
+yum -y --enablerepo=rpmforge install axel sslh ptunnel unrar
+
+# matiin exim
+service exim stop
+chkconfig exim off
+
+# setting vnstat
+vnstat -u -i venet0
+echo "MAILTO=root" > /etc/cron.d/vnstat
+echo "*/5 * * * * root /usr/sbin/vnstat.cron" >> /etc/cron.d/vnstat
+sed -i 's/eth0/venet0/g' /etc/sysconfig/vnstat
+service vnstat restart
+chkconfig vnstat on
+
+# install screenfetch
+cd
+wget https://github.com/KittyKatt/screenFetch/raw/master/screenfetch-dev
+mv screenfetch-dev /usr/bin/screenfetch
+chmod +x /usr/bin/screenfetch
+echo "clear" >> .bash_profile
+echo "screenfetch" >> .bash_profile
+
+# install webserver
+cd
+wget -O /etc/nginx/nginx.conf "$source/nginx.conf"
+sed -i 's/www-data/nginx/g' /etc/nginx/nginx.conf
+mkdir -p /home/vps/public_html
+echo "<pre>AUTOSCRIPT SETUP CENTOS 7</pre>" > /home/vps/public_html/index.html
+echo "<?php phpinfo(); ?>" > /home/vps/public_html/info.php
+rm /etc/nginx/conf.d/*
+wget -O /etc/nginx/conf.d/vps.conf "$source/vps.conf"
+sed -i 's/apache/nginx/g' /etc/php-fpm.d/www.conf
+chmod -R +rx /home/vps
+service php-fpm restart
+service nginx restart
+
+# install openvpn
+wget -O /etc/openvpn/openvpn.tar "$source/openvpn-debian.tar"
+cd /etc/openvpn/
+tar xf openvpn.tar
+wget -O /etc/openvpn/1194.conf "$source/1194-centos.conf"
+if [ "$OS" == "x86_64" ]; then
+  wget -O /etc/openvpn/1194.conf "$source/1194-centos64.conf"
+fi
+wget -O /etc/iptables.up.rules "$source/iptables.up.rules"
+sed -i '$ i\iptables-restore < /etc/iptables.up.rules' /etc/rc.local
+sed -i '$ i\iptables-restore < /etc/iptables.up.rules' /etc/rc.d/rc.local
+MYIP=`curl -s ifconfig.me`;
+MYIP2="s/xxxxxxxxx/$myip/g";
+sed -i $myip /etc/iptables.up.rules;
+iptables-restore < /etc/iptables.up.rules
+sysctl -w net.ipv4.ip_forward=1
+sed -i 's/net.ipv4.ip_forward = 0/net.ipv4.ip_forward = 1/g' /etc/sysctl.conf
+service openvpn restart
+chkconfig openvpn on
+cd
+
+# configure openvpn client config
+cd /etc/openvpn/
+wget -O /etc/openvpn/1194-client.ovpn "$source/1194-client.conf"
+sed -i $myip /etc/openvpn/1194-client.ovpn;
+PASS=`cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 15 | head -n 1`;
+useradd -M -s /bin/false Vps
+echo "Vps:$PASS" | chpasswd
+echo "Vps" > pass.txt
+echo "$PASS" >> pass.txt
+tar cf client.tar 1194-client.ovpn pass.txt
+cp client.tar /home/vps/public_html/
+cd
+
+# install badvpn
+wget -O /usr/bin/badvpn-udpgw "$source/badvpn-udpgw"
+if [ "$OS" == "x86_64" ]; then
+  wget -O /usr/bin/badvpn-udpgw "$source/badvpn-udpgw64"
+fi
+sed -i '$ i\screen -AmdS badvpn badvpn-udpgw --listen-addr 127.0.0.1:7300' /etc/rc.local
+sed -i '$ i\screen -AmdS badvpn badvpn-udpgw --listen-addr 127.0.0.1:7300' /etc/rc.d/rc.local
+chmod +x /usr/bin/badvpn-udpgw
+screen -AmdS badvpn badvpn-udpgw --listen-addr 127.0.0.1:7300
+
+# install mrtg
+cd /etc/snmp/
+wget -O /etc/snmp/snmpd.conf "$source/snmpd.conf"
+wget -O /root/mrtg-mem.sh "$source/mrtg-mem.sh"
+chmod +x /root/mrtg-mem.sh
+service snmpd restart
+chkconfig snmpd on
+snmpwalk -v 1 -c public localhost | tail
+mkdir -p /home/vps/public_html/mrtg
+cfgmaker --zero-speed 100000000 --global 'WorkDir: /home/vps/public_html/mrtg' --output /etc/mrtg/mrtg.cfg public@localhost
+curl "$source/mrtg.conf" >> /etc/mrtg/mrtg.cfg
+sed -i 's/WorkDir: \/var\/www\/mrtg/# WorkDir: \/var\/www\/mrtg/g' /etc/mrtg/mrtg.cfg
+sed -i 's/# Options\[_\]: growright, bits/Options\[_\]: growright/g' /etc/mrtg/mrtg.cfg
+indexmaker --output=/home/vps/public_html/mrtg/index.html /etc/mrtg/mrtg.cfg
+echo "0-59/5 * * * * root env LANG=C /usr/bin/mrtg /etc/mrtg/mrtg.cfg" > /etc/cron.d/mrtg
+LANG=C /usr/bin/mrtg /etc/mrtg/mrtg.cfg
+LANG=C /usr/bin/mrtg /etc/mrtg/mrtg.cfg
+LANG=C /usr/bin/mrtg /etc/mrtg/mrtg.cfg
+cd
+
+# setting port ssh
+sed -i '/Port 22/a Port 143' /etc/ssh/sshd_config
+sed -i 's/#Port 22/Port  22/g' /etc/ssh/sshd_config
+service sshd restart
+chkconfig sshd on
+
+# install dropbear
+yum -y install dropbear
+echo "OPTIONS=\"-p 109 -p 110 -p 443\"" > /etc/sysconfig/dropbear
+echo "/bin/false" >> /etc/shells
+service dropbear restart
+chkconfig dropbear on
+
+# install vnstat gui
+cd /home/vps/public_html/
+wget http://www.sqweek.com/sqweek/files/vnstat_php_frontend-1.5.1.tar.gz
+tar xf vnstat_php_frontend-1.5.1.tar.gz
+rm vnstat_php_frontend-1.5.1.tar.gz
+mv vnstat_php_frontend-1.5.1 vnstat
+cd vnstat
+sed -i 's/eth0/venet0/g' config.php
+sed -i "s/\$iface_list = array('venet0', 'sixxs');/\$iface_list = array('venet0');/g" config.php
+sed -i "s/\$language = 'nl';/\$language = 'en';/g" config.php
+sed -i 's/Internal/Internet/g' config.php
+sed -i '/SixXS IPv6/d' config.php
+cd
+
+# install fail2ban
+yum -y install fail2ban
+service fail2ban restart
+chkconfig fail2ban on
+
+# install squid
+yum -y install squid
+wget -O /etc/squid/squid.conf "$source/squid-centos.conf"
+sed -i $myip /etc/squid/squid.conf;
+service squid restart
+chkconfig squid on
+
+# install webmin
+cd
+wget http://prdownloads.sourceforge.net/webadmin/webmin-1.670-1.noarch.rpm
+rpm -i webmin-1.670-1.noarch.rpm;
+rm webmin-1.670-1.noarch.rpm
+service webmin restart
+chkconfig webmin on
+
+# pasang bmon
+if [ "$OS" == "x86_64" ]; then
+  wget -O /usr/bin/bmon "$source/bmon64"
+else
+  wget -O /usr/bin/bmon "$source/bmon"
+fi
+chmod +x /usr/bin/bmon
+
+# downlaod script
+cd
+sed -i '$ i\screen -AmdS limit /root/limit.sh' /etc/rc.local
+sed -i '$ i\screen -AmdS limit /root/limit.sh' /etc/rc.d/rc.local
+
+function MenuInstall {
+echo "Installing Menu Options..."
+	wget $source/generate
+	wget $source/buatakun
+	wget $source/trial
+	wget $source/userpass
+	wget $source/userrenew
+	wget $source/userdelete
+	wget $source/userlogin
+	wget $source/autolimit
+	wget $source/auto-limit-script
+	wget $source/userdetail
+	wget $source/deleteuserexpire
+	wget $source/autokilluser
+	wget $source/userban
+	wget $source/userunban
+	wget $source/userlock
+	wget $source/userunlock
+	wget $source/loglimit
+	wget $source/logban
+	wget $source/useraddpptp
+	wget $source/userdeletepptp
+	wget $source/detailpptp
+	wget $source/userloginpptp
+	wget $source/alluserpptp
+	wget $source/autoreboot
+	wget $source/killmultilog
+	wget $source/menu
+	apt-get install python
+	wget https://raw.githubusercontent.com/rasta-team/MyVPS/master/config/speedtest.py
+	chmod +x speedtest.py
+}
+
+function ExecuteMenu {
+echo "Executing all Menu..."
+	mv ./buatakun /usr/bin/buatakun
+	mv ./generate /usr/bin/generate
+	mv ./trial /usr/bin/trial
+	mv ./userpass /usr/bin/userpass
+	mv ./userrenew /usr/bin/userrenew
+	mv ./userdelete /usr/bin/userdelete
+	mv ./userlogin /usr/bin/userlogin
+	mv ./autolimit /usr/bin/autolimit
+	mv ./auto-limit-script /usr/bin/auto-limit-script
+	mv ./userdetail /usr/bin/userdetail
+	mv ./deleteuserexpire /usr/bin/deleteuserexpire
+	mv ./autokilluser /usr/bin/autokilluser
+	mv ./userban /usr/bin/userban
+	mv ./userunban /usr/bin/userunban
+	mv ./userlock /usr/bin/userlock
+	mv ./userunlock /usr/bin/userunlock
+	mv ./loglimit /usr/bin/loglimit
+	mv ./logban /usr/bin/logban
+	mv ./useraddpptp /usr/bin/useraddpptp
+	mv ./userdeletepptp /usr/bin/userdeletepptp
+	mv ./detailpptp /usr/bin/detailpptp
+	mv ./userloginpptp /usr/bin/userloginpptp
+	mv ./alluserpptp /usr/bin/alluserpptp
+	mv ./autoreboot /usr/bin/autoreboot
+	mv ./auto-limit-script /usr/bin/killmultilog
+	mv ./menu /usr/local/bin/menu
+}
+
+function MenuPermission {
+echo "Granting Menu's Permission..."
+	chmod +x /usr/local/bin/menu
+	chmod +x /usr/bin/auto-limit-script
+	chmod +x /usr/bin/autoreboot
+	chmod +x /usr/bin/alluserpptp
+	chmod +x /usr/bin/userloginpptp
+	chmod +x /usr/bin/detailpptp
+	chmod +x /usr/bin/userdeletepptp
+	chmod +x /usr/bin/useraddpptp
+	chmod +x /usr/bin/logban
+	chmod +x /usr/bin/loglimit
+	chmod +x /usr/bin/userunlock
+	chmod +x /usr/bin/userlock
+	chmod +x /usr/bin/userunban
+	chmod +x /usr/bin/userban
+	chmod +x /usr/bin/autokilluser
+	chmod +x /usr/bin/deleteuserexpire
+	chmod +x /usr/bin/userdetail
+	chmod +x /usr/bin/killmultilog
+	chmod +x /usr/bin/autolimit
+	chmod +x /usr/bin/userlogin
+	chmod +x /usr/bin/userdelete
+	chmod +x /usr/bin/userrenew
+	chmod +x /usr/bin/userpass
+	chmod +x /usr/bin/trial
+	chmod +x /usr/bin/generate
+	chmod +x /usr/bin/buatakun
+}
+
+# cron
+service crond start
+chkconfig crond on
+
+# set time GMT +7
+ln -fs /usr/share/zoneinfo/Asia/Kuala_Lumpur /etc/localtime;
+
+# finalisasi
+chown -R nginx:nginx /home/vps/public_html
+service nginx start
+service php-fpm start
+service vnstat restart
+service openvpn restart
+service snmpd restart
+service sshd restart
+service dropbear restart
+service fail2ban restart
+service squid restart
+service webmin restart
+service crond start
+chkconfig crond on
+echo -e "${cyan} ======================= ${noclr}" "${purple} AUTOSCRIPT SSH+VPN CENTOS 7 ${noclr}" "${cyan} ======================= ${noclr}"
+
+# info
+clear
+echo "Installation process are finished !"
+echo -e "\e[0;32m Please REBOOT your VPS after this ! \e[0;0m"
+echo -e "\e[0;35m #=============================================# \e[0;0m"
+echo -e "\e[1;36m #        Thank you for buying with us !       # \e[0;0m"
+echo -e "\e[0;35m #=============================================# \e[0;0m"
+echo -e "\e[1;36m #               VPS's Details                 # \e[0;0m"
+echo -e "\e[0;35m #=============================================# \e[0;0m"
+echo -e "\e[0;32m #   Webmin Acess : http://$myip:10000         # \e[0;0m"
+echo -e "\e[0;33m #   Squid3 Port   : 8080/80/8000/3128         # \e[0;0m"
+echo -e "\e[0;34m #   OpenSSH Port  : 22/143                    # \e[0;0m"
+echo -e "\e[0;31m #   Dropbear Port : 109/110/443               # \e[0;0m"
+echo -e "\e[0;35m #   OVPN Client : http://$myip/client.tar     # \e[0;0m"
+echo -e "\e[0;37m #   TimeZone      : Asia [Kuala Lumpur]       # \e[0;0m"
+echo -e "\e[0;36m #=============================================# \e[0;0m"
+
+echo -e "\e[0;35m #=============================================# \e[0;0m"
+echo -e "\e[1;36m #     Availability Of Additional Features     # \e[0;0m"
+echo -e "\e[0;35m #=============================================# \e[0;0m"
+echo -e "\e[0;32m #          DDOS PROTECTION : ON               # \e[0;0m"
+echo -e "\e[0;33m #            FAIL2BAN     : ON                # \e[0;0m"
+echo -e "\e[0;35m #=============================================# \e[0;0m"
