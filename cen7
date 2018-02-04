@@ -28,104 +28,71 @@ fi
 cd
 
 
-function VAR Intializer {
-	echo -e "${cyan} ======================= ${noclr}" "${purple} AUTOSCRIPT SSH+VPN CENTOS 7 ${noclr}" "${cyan} ======================= ${noclr}"
-	OS=`uname -p`;
-}
-
-function RootUse {
-	echo "Switching to root..."
-cd
-}
 
 
-function SetLocale {
-	echo "Setting Locale.."
-	sed -i 's/AcceptEnv/#AcceptEnv/g' /etc/ssh/sshd_config
-	service sshd restart
-}
+# disable se linux
+echo 0 > /selinux/enforce
+sed -i 's/SELINUX=enforcing/SELINUX=disable/g'  /etc/sysconfig/selinux
 
+# set locale
+sed -i 's/AcceptEnv/#AcceptEnv/g' /etc/ssh/sshd_config
+service sshd restart
 
-function DisableIPV6 {
-	echo "Disabling IPV6..."
-	echo 1 > /proc/sys/net/ipv6/conf/all/disable_ipv6
+# disable ipv6
+echo 1 > /proc/sys/net/ipv6/conf/all/disable_ipv6
 sed -i '$ i\echo 1 > /proc/sys/net/ipv6/conf/all/disable_ipv6' /etc/rc.local
 sed -i '$ i\echo 1 > /proc/sys/net/ipv6/conf/all/disable_ipv6' /etc/rc.d/rc.local
-}
+
+#Add DNS Server ipv4
+echo "nameserver 8.8.8.8" > /etc/resolv.conf
+echo "nameserver 8.8.4.4" >> /etc/resolv.conf
+sed -i '$ i\echo "nameserver 8.8.8.8" > /etc/resolv.conf' /etc/rc.local
+sed -i '$ i\echo "nameserver 8.8.4.4" >> /etc/resolv.conf' /etc/rc.local
+sed -i '$ i\echo "nameserver 8.8.8.8" > /etc/resolv.conf'  /etc/rc.d/rc.local
+sed -i '$ i\echo "nameserver 8.8.4.4" >> /etc/resolv.conf'  /etc/rc.d/rc.local
+
+# install wget and curl
+yum -y install wget curl
+
+# setting repo
+rpm -Uvh http://dl.fedoraproject.org/pub/epel/7/x86_64/e/epel-release-7-7.noarch.rpm
+rpm -Uvh http://rpms.famillecollet.com/enterprise/remi-release-7.rpm
+#rpm -Uvh http://pkgs.repoforge.org/rpmforge-release/rpmforge-release-0.5.3-1.el7.rf.x86_64.rpm
 
 
-function InstallAPTGet {
-	echo "Installing apt-get..."
-	uname -i
-	wget http://pkgs.repoforge.org/rpmforge-release/rpmforge-release-0.5.3-1.el6.rf.x86_64.rpm
-	rpm -i rpmforge-release-0.5.*.rpm
-	yum install apt
-	sudo apt-get update
-}
-
-
-function InstallWgetCurl {
-	echo "Installing WGET and CURL..."
-	yum -y install wget curl
-}
-
-function SettingRepo {
-	echo "Setting the Repository..."
-wget http://dl.fedoraproject.org/pub/epel/6/i386/epel-release-6-8.noarch.rpm
-wget http://rpms.famillecollet.com/enterprise/remi-release-6.rpm
-rpm -Uvh epel-release-6-8.noarch.rpm
-rpm -Uvh remi-release-6.rpm
-}
-
-if [ "$OS" == "x86_64" ]; then
-  wget http://pkgs.repoforge.org/rpmforge-release/rpmforge-release-0.5.3-1.el6.rf.x86_64.rpm
-  rpm -Uvh rpmforge-release-0.5.3-1.el6.rf.x86_64.rpm
-else
-  wget http://pkgs.repoforge.org/rpmforge-release/rpmforge-release-0.5.3-1.el6.rf.i686.rpm
-  rpm -Uvh rpmforge-release-0.5.3-1.el6.rf.i686.rpm
-fi
-
-sed -i 's/enabled = 1/enabled = 0/g' /etc/yum.repos.d/rpmforge.repo
 sed -i -e "/^\[remi\]/,/^\[.*\]/ s|^\(enabled[ \t]*=[ \t]*0\\)|enabled=1|" /etc/yum.repos.d/remi.repo
 rm -f *.rpm
 
-function RemoveUnused {
-	echo "Removing the UNUSED Files..."
+# remove unused
 yum -y remove sendmail;
 yum -y remove httpd;
 yum -y remove cyrus-sasl
-}
 
-function UpdateSystem {
-	echo "Updating the System..."
+# update
 yum -y update
-}
 
-function installwebserver {
-	echo "Installing Web Server..."
+# install webserver
 yum -y install nginx php-fpm php-cli
 service nginx restart
 service php-fpm restart
 chkconfig nginx on
 chkconfig php-fpm on
-}
 
 # install essential package
-yum -y install rrdtool screen iftop htop nmap bc nethogs openvpn vnstat ngrep mtr git zsh mrtg unrar rsyslog rkhunter mrtg net-snmp net-snmp-utils expect nano bind-utils
+yum -y install wondershaper rrdtool screen iftop htop nmap bc nethogs openvpn vnstat ngrep mtr git zsh mrtg unrar rsyslog rkhunter mrtg net-snmp net-snmp-utils expect nano bind-utils
 yum -y groupinstall 'Development Tools'
 yum -y install cmake
 
-yum -y --enablerepo=rpmforge install axel sslh ptunnel unrar
+yum -y install axel sslh ptunnel unrar
 
 # matiin exim
 service exim stop
 chkconfig exim off
 
 # setting vnstat
-vnstat -u -i venet0
+vnstat -u -i eth0
 echo "MAILTO=root" > /etc/cron.d/vnstat
 echo "*/5 * * * * root /usr/sbin/vnstat.cron" >> /etc/cron.d/vnstat
-sed -i 's/eth0/venet0/g' /etc/sysconfig/vnstat
 service vnstat restart
 chkconfig vnstat on
 
