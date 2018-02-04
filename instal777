@@ -435,4 +435,4 @@ rm -f /root/mrtg-mem
 rm -f /root/pptp.sh
 rm -f /root/dropbear-2017.75.tar.bz2
 rm -rf /root/dropbear-2017.75
-rm -f /root/debian7.sh
+rm -f /root/insta777
